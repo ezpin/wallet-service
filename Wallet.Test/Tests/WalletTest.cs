@@ -52,12 +52,6 @@ public class WalletTest : BaseControllerTest
     }
 
     [TestMethod]
-    public Task Success_Get_Transactions_Of_Specified_Wallets()
-    {
-        throw new NotImplementedException();
-    }
-
-    [TestMethod]
     public async Task Success_MinBalance_when_does_not_set_yet()
     {
         // create dom

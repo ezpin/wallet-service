@@ -1,19 +1,14 @@
 ﻿using EWallet.DtoConverters;
 using EWallet.Dtos;
 using EWallet.Models;
+using EWallet.Models.Views;
 using EWallet.Repo;
+using Microsoft.EntityFrameworkCore;
 
 namespace EWallet.Service;
 
-public class WalletService
+public class WalletService(WalletRepo walletRepo)
 {
-    private readonly WalletRepo _walletRepo;
-
-    public WalletService(WalletRepo walletRepo)
-    {
-        _walletRepo = walletRepo;
-    }
-
     public async Task<Wallet> Create(int appId)
     {
         // Create Wallet
@@ -24,8 +19,8 @@ public class WalletService
         };
 
         // Save to db
-        await _walletRepo.AddEntity(walletModel);
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.AddEntity(walletModel);
+        await walletRepo.SaveChangesAsync();
 
         var wallet = await Get(appId, walletModel.WalletId);
         return wallet;
@@ -34,7 +29,7 @@ public class WalletService
     public async Task<Wallet> Get(int appId, int walletId)
     {
         // Get wallet from db
-        var wallet = await _walletRepo.GetWallet(appId, walletId);
+        var wallet = await walletRepo.GetWallet(appId, walletId);
 
         return wallet.ToDto();
     }
@@ -47,11 +42,11 @@ public class WalletService
         // get currency to make sure wallet is correct
         await GetCurrency(appId, request.CurrencyId);
 
-        var minWalletCurrency = await _walletRepo.FindWalletCurrency(walletId, request.CurrencyId);
+        var minWalletCurrency = await walletRepo.FindWalletCurrency(walletId, request.CurrencyId);
 
         if (minWalletCurrency == null)
         {
-            await _walletRepo.AddEntity(new WalletBalanceModel
+            await walletRepo.AddEntity(new WalletBalanceModel
             {
                 WalletId = walletId,
                 CurrencyId = request.CurrencyId,
@@ -65,55 +60,25 @@ public class WalletService
             minWalletCurrency.ModifiedTime = DateTime.UtcNow;
         }
 
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.SaveChangesAsync();
 
         // prepare output
         return await Get(appId, walletId);
     }
 
-    public async Task<Order[]> GetWalletTransactionsOfParticipantWallets(int appId,
-        string participantWalletIds, DateTime? beginTime, DateTime? endTime, int? recordCount, int? recordIndex)
+    public async Task<OrderItemView[]> GetWalletTransactions(int appId,
+        int walletId, int? participantWalletId = null, DateTime? beginTime = null, DateTime? endTime = null, int? orderTypeId = null, int? pageSize = null, int? pageNumber = null)
     {
-        //// Parse walletIds
-        //var walletIds = participantWalletIds.Split(",").Select(int.Parse).ToArray();
+        await Get(appId, walletId);
 
-        //// Get orders that contain transaction of participant wallets
-        //var orders = await _walletRepo.GetOrdersByWalletIds(appId, walletIds, beginTime, endTime, recordCount, recordIndex);
+        if (participantWalletId is not null)
+            await Get(appId, (int)participantWalletId);
 
-        //// List of orders
-        //var result = new List<Order>();
+        // Get orders that contain transaction of participant wallets
+        var orders = await walletRepo.GetOrderItemsByWalletIds(
+        appId, walletId, participantWalletId, beginTime, endTime, orderTypeId, pageSize, pageNumber);
 
-        //// Get decreased records
-        //foreach (var order in orders)
-        //{
-        //    var decreasedRecords = order.OrderTransactionModels!.Where(t => t.Amount < 0 && (walletIds.Any(i => i == t.WalletId) || walletIds.Any(i => i == t.ReferenceWalletTransaction!.WalletId)));
-
-        //    // Create transactions
-        //    var transactions = decreasedRecords.Select(transaction => new WalletTransaction(transaction.WalletTransactionId, transaction.WalletId, transaction.ReferenceWalletTransaction!.WalletId, -transaction.Amount, transaction.CreatedTime, order.AuthorizedTime, order.CapturedTime)).ToList();
-
-        //    // Check if order is voided
-        //    var voidOrder = order.VoidOrder;
-
-        //    if (voidOrder is null)
-        //    {
-        //        result.Add(new Order(order.OrderId, order.CurrencyId, order.TransactionType, GetStatusOfOrder(order),
-        //            transactions, null));
-        //    }
-        //    else
-        //    {
-        //        // Get void decreased records
-        //        var voidDecreasedRecords = voidOrder!.OrderTransactionModels!.Where(t => t.Amount < 0 && (walletIds.Any(i => i == t.WalletId) || walletIds.Any(i => i == t.ReferenceWalletTransaction!.WalletId)));
-
-        //        // Create void transactions
-        //        var voidTransactions = voidDecreasedRecords.Select(transaction => new WalletTransaction(transaction.WalletTransactionId, transaction.WalletId, transaction.ReferenceWalletTransaction!.WalletId, -transaction.Amount, transaction.CreatedTime, voidOrder.AuthorizedTime, voidOrder.CapturedTime)).ToList();
-
-        //        result.Add(new Order(order.OrderId, order.CurrencyId, order.TransactionType, GetStatusOfOrder(order),
-        //            transactions, new Order(voidOrder.OrderId, voidOrder.CurrencyId, voidOrder.TransactionType, OrderStatus.Captured, voidTransactions, null)));
-        //    }
-        //}
-
-        //return result.ToArray();
-        throw new NotImplementedException();
+        return orders;
     }
 
     public OrderStatus GetStatusOfOrder(OrderModel order)
@@ -148,14 +113,14 @@ public class WalletService
             AppId = appId
         };
 
-        await _walletRepo.BeginTransaction();
+        await walletRepo.BeginTransaction();
 
         // Save to db
-        await _walletRepo.AddEntity(currency);
-        await _walletRepo.SaveChangesAsync();
+        await walletRepo.AddEntity(currency);
+        await walletRepo.SaveChangesAsync();
 
         // set minBalance for system wallet of the app
-        var app = await _walletRepo.GetApp(appId);
+        var app = await walletRepo.GetApp(appId);
         ArgumentNullException.ThrowIfNull(app.SystemWalletId);
         await SetMinBalance(appId, (int)app.SystemWalletId, new SetMinBalanceRequest
         {
@@ -163,7 +128,7 @@ public class WalletService
             MinBalance = -long.MaxValue
         });
 
-        await _walletRepo.CommitTransaction();
+        await walletRepo.CommitTransaction();
 
         return currency.CurrencyId;
     }
@@ -171,15 +136,15 @@ public class WalletService
     public async Task<int[]> GetCurrencies(int appId)
     {
         // Validate app
-        await _walletRepo.GetApp(appId);
+        await walletRepo.GetApp(appId);
 
-        var currencies = await _walletRepo.GetCurrencies(appId);
+        var currencies = await walletRepo.GetCurrencies(appId);
         return currencies.Select(c => c.CurrencyId).ToArray();
     }
 
-    public async Task<int> GetCurrency(int appId, int currencyId)
+    private async Task<int> GetCurrency(int appId, int currencyId)
     {
-        var currencyModel = await _walletRepo.GetCurrency(appId, currencyId);
+        var currencyModel = await walletRepo.GetCurrency(appId, currencyId);
         return currencyModel.CurrencyId;
     }
 }

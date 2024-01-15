@@ -7,21 +7,14 @@ public static class OrderConverter
     public static Order ToDto(this OrderModel model)
     {
         // prepare order status
-        OrderStatus orderStatus;
+        var orderStatus = OrderStatusConverter.ToDto(model.VoidedTime, model.CapturedTime);
 
-        if (model.VoidedTime is not null)
-            orderStatus = OrderStatus.Voided;
-        else if (model.CapturedTime is not null)
-            orderStatus = OrderStatus.Captured;
-        else
-            orderStatus = OrderStatus.Authorized;
-
-        // prepare transactions
         ArgumentNullException.ThrowIfNull(model.OrderItems);
         return new Order
         {
             OrderId = model.OrderReferenceNumber,
             CurrencyId = model.CurrencyId,
+            OrderTypeId = model.OrderTypeId,
             CreatedTime = model.CreatedTime,
             AuthorizedTime = model.CreatedTime,
             CapturedTime = model.CapturedTime,
