@@ -123,4 +123,5 @@ public class WalletService(WalletRepo walletRepo)
         var currencyModel = await walletRepo.GetCurrency(appId, currencyId);
         return currencyModel.CurrencyId;
     }
+
 }
