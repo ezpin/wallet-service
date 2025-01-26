@@ -1494,4 +1494,135 @@ public class OrderTest : BaseControllerTest
         var idempotentOrder = await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
         Assert.AreEqual(order.OrderId, idempotentOrder.OrderId);
     }
+
+    [TestMethod]
+    public async Task Create_an_order_with_sequence()
+    {
+        // create wallet on app1
+        var walletDom = await WalletDom.Create(TestInit1);
+        var walletDom2 = await WalletDom.Create(TestInit1, currencyId:walletDom.CurrencyId);
+        var walletDom3 = await WalletDom.Create(TestInit1, currencyId:walletDom.CurrencyId);
+        var walletDom4 = await WalletDom.Create(TestInit1,currencyId:walletDom.CurrencyId);
+
+        // create order
+        var request = new CreateOrderRequest
+        {
+            CurrencyId = walletDom.CurrencyId,
+            OrderId = Guid.NewGuid(),
+            TransactionType = TransactionType.Authorize,
+            ParticipantWallets = new List<ParticipantTransferItem>
+            {
+                new ()
+                {
+                    SenderWalletId = walletDom.Wallet.WalletId,
+                    ReceiverWalletId = walletDom2.Wallet.WalletId,
+                    Amount = 100
+                },
+                new ()
+                {
+                    SenderWalletId = walletDom3.Wallet.WalletId,
+                    ReceiverWalletId = walletDom4.Wallet.WalletId,
+                    Amount = 100
+                }
+            }
+        };
+
+        var senderWalletBefore1 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom.Wallet.WalletId);
+        var senderWalletBefore2 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom3.Wallet.WalletId);
+        var receiverWalletBefore1 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom2.Wallet.WalletId);
+        var receiverWalletBefore2 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom4.Wallet.WalletId);
+
+        ArgumentNullException.ThrowIfNull(senderWalletBefore1.Currencies);
+        ArgumentNullException.ThrowIfNull(senderWalletBefore2.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletBefore1.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletBefore2.Currencies);
+
+        // create order
+        var orderCreated = await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
+        var order = await TestInit1.OrdersClient.GetOrderAsync(TestInit1.AppId, orderCreated.OrderId);
+
+        // validate general properties
+        Assert.IsNull(order.CapturedTime);
+        Assert.IsNull(order.VoidedTime);
+        Assert.AreEqual(OrderStatus.Authorized, order.Status);
+
+        var senderWalletAfter1 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom.Wallet.WalletId);
+        var senderWalletAfter2 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom3.Wallet.WalletId);
+        var receiverWalletAfter1 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom2.Wallet.WalletId);
+        var receiverWalletAfter2 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom4.Wallet.WalletId);
+
+        ArgumentNullException.ThrowIfNull(senderWalletAfter1.Currencies);
+        ArgumentNullException.ThrowIfNull(senderWalletAfter2.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletAfter1.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletAfter2.Currencies);
+
+        // validate receiver balance
+        Assert.AreEqual(receiverWalletBefore1.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0,
+            receiverWalletAfter1.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0);
+
+        Assert.AreEqual(receiverWalletBefore2.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0,
+            receiverWalletAfter2.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0);
+    }
+
+    [TestMethod]
+    public async Task Create_an_order_withOut_sequence()
+    {
+        // create wallet on app1
+        var walletDom = await WalletDom.Create(TestInit1);
+        var walletDom2 = await WalletDom.Create(TestInit1, currencyId: walletDom.CurrencyId);
+        var walletDom3 = await WalletDom.Create(TestInit1, currencyId: walletDom.CurrencyId);
+
+        // create order
+        var request = new CreateOrderRequest
+        {
+            CurrencyId = walletDom.CurrencyId,
+            OrderId = Guid.NewGuid(),
+            TransactionType = TransactionType.Authorize,
+            ParticipantWallets = new List<ParticipantTransferItem>
+            {
+                new ()
+                {
+                    SenderWalletId = walletDom.Wallet.WalletId,
+                    ReceiverWalletId = walletDom2.Wallet.WalletId,
+                    Amount = 100
+                },
+                new ()
+                {
+                    SenderWalletId = walletDom.Wallet.WalletId,
+                    ReceiverWalletId = walletDom3.Wallet.WalletId,
+                    Amount = 100
+                }
+            }
+        };
+
+        var senderWalletBefore = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom.Wallet.WalletId);
+        var receiverWalletBefore = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom2.Wallet.WalletId);
+        var receiverWalletBefore2 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom3.Wallet.WalletId);
+        ArgumentNullException.ThrowIfNull(senderWalletBefore.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletBefore.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletBefore2.Currencies);
+
+        var orderCreated = await TestInit1.OrdersClient.CreateOrderAsync(TestInit1.AppId, request);
+        var order = await TestInit1.OrdersClient.GetOrderAsync(TestInit1.AppId, orderCreated.OrderId);
+
+        // validate general properties
+        Assert.IsNull(order.CapturedTime);
+        Assert.IsNull(order.VoidedTime);
+        Assert.AreEqual(OrderStatus.Authorized, order.Status);
+
+        var senderWalletAfter = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom.Wallet.WalletId);
+        var receiverWalletAfter = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom2.Wallet.WalletId);
+        var receiverWalletAfter2 = await TestInit1.WalletsClient.GetWalletAsync(TestInit1.AppId, walletDom3.Wallet.WalletId);
+        ArgumentNullException.ThrowIfNull(senderWalletAfter.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletAfter.Currencies);
+        ArgumentNullException.ThrowIfNull(receiverWalletAfter2.Currencies);
+
+        // validate receiver balance
+        Assert.AreEqual(receiverWalletAfter.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0,
+            receiverWalletBefore.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0);
+
+        Assert.AreEqual(receiverWalletAfter2.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0,
+            receiverWalletBefore2.Currencies.SingleOrDefault(x => x.CurrencyId == walletDom.CurrencyId)?.Balance ?? 0);
+
+    }
 }
