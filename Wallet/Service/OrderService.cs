@@ -84,12 +84,17 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     }
 
     private List<WalletBalanceModel> PreCalculateOrderItemSender(List<WalletBalanceModel> walletBalances, WalletBalanceModel? senderWalletBalance,
-        int senderWalletId, decimal amount)
+        int senderWalletId, decimal amount, bool allowPartialSuccess)
     {
-        if (senderWalletBalance is null ||
-         (senderWalletBalance.Balance < amount && senderWalletBalance.Balance + (-senderWalletBalance.MinBalance) < amount))
-            throw new InsufficientBalanceException(
-                $"WalletId: {senderWalletId} does not have sufficient balance, amount is: {amount}");
+        if (senderWalletBalance is null || (senderWalletBalance.Balance < amount &&
+                                            senderWalletBalance.Balance + (-senderWalletBalance.MinBalance) < amount))
+        {
+            if (allowPartialSuccess is false)
+            {
+                throw new InsufficientBalanceException($"WalletId: {senderWalletId} does not have sufficient balance, amount is: {amount}");
+            }
+            return walletBalances;
+        }
 
         ArgumentNullException.ThrowIfNull(senderWalletBalance);
         if (senderWalletBalance.Balance >= amount)
@@ -126,7 +131,7 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
     private void PreCalculateOrderItem(List<WalletBalanceModel> walletBalances, OrderItemModel item)
     {
         var senderWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.SenderWalletId);
-        walletBalances = PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, item.Amount);
+        walletBalances = PreCalculateOrderItemSender(walletBalances, senderWalletBalance, item.SenderWalletId, item.Amount, item.Order.AllowPartialSuccess);
 
         var receiverWalletBalance = walletBalances.SingleOrDefault(x => x.WalletId == item.ReceiverWalletId);
         PreCalculateOrderItemReceiver(walletBalances, receiverWalletBalance, item.ReceiverWalletId, item.Amount);
@@ -343,7 +348,8 @@ public class OrderService(WalletRepo walletRepo, AppService appService)
             TransactionType = request.TransactionType,
             AuthorizedTime = request.TransactionType == TransactionType.Authorize ? DateTime.UtcNow : null,
             CapturedTime = request.TransactionType == TransactionType.Sale ? DateTime.UtcNow : null,
-            ProcessTime = null
+            ProcessTime = null,
+            AllowPartialSuccess = request.AllowPartialSuccess
         };
         await walletRepo.AddEntity(order);
         await walletRepo.SaveChangesAsync();

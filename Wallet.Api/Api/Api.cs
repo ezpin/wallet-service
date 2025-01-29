@@ -1220,7 +1220,7 @@ namespace EWallet.Api
 
         /// <param name="cancellationToken">A cancellation token that can be used by other objects or threads to receive notice of cancellation.</param>
         /// <exception cref="GrayMint.Common.Client.ApiException">A server side error occurred.</exception>
-        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.ICollection<Wallet>> GetWalletsAsync(int appId, System.Collections.Generic.IEnumerable<int> walletIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
+        public virtual async System.Threading.Tasks.Task<System.Collections.Generic.ICollection<Wallet>> GetWalletsAsync(int appId, string walletIds, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken))
         {
             if (appId == null)
                 throw new System.ArgumentNullException("appId");
@@ -1234,10 +1234,6 @@ namespace EWallet.Api
             {
                 using (var request_ = new System.Net.Http.HttpRequestMessage())
                 {
-                    var json_ = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(walletIds, _settings.Value);
-                    var content_ = new System.Net.Http.ByteArrayContent(json_);
-                    content_.Headers.ContentType = System.Net.Http.Headers.MediaTypeHeaderValue.Parse("application/json");
-                    request_.Content = content_;
                     request_.Method = new System.Net.Http.HttpMethod("GET");
                     request_.Headers.Accept.Add(System.Net.Http.Headers.MediaTypeWithQualityHeaderValue.Parse("application/json"));
 
@@ -1247,6 +1243,9 @@ namespace EWallet.Api
                     urlBuilder_.Append("api/v1/apps/");
                     urlBuilder_.Append(System.Uri.EscapeDataString(ConvertToString(appId, System.Globalization.CultureInfo.InvariantCulture)));
                     urlBuilder_.Append("/wallets");
+            urlBuilder_.Append('?');
+            urlBuilder_.Append(System.Uri.EscapeDataString("walletIds")).Append('=').Append(System.Uri.EscapeDataString(ConvertToString(walletIds, System.Globalization.CultureInfo.InvariantCulture))).Append('&');
+            urlBuilder_.Length--;
 
                     PrepareRequest(client_, request_, urlBuilder_);
 
@@ -2159,6 +2158,9 @@ namespace EWallet.Api
 
         [System.Text.Json.Serialization.JsonPropertyName("orderTypeId")]
         public int OrderTypeId { get; set; } = default!;
+
+        [System.Text.Json.Serialization.JsonPropertyName("allowPartialSuccess")]
+        public bool AllowPartialSuccess { get; set; } = default!;
 
         [System.Text.Json.Serialization.JsonPropertyName("transactionType")]
         [System.ComponentModel.DataAnnotations.Required(AllowEmptyStrings = true)]
